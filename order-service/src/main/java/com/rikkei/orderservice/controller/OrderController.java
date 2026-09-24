@@ -61,10 +61,6 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     }
 
-    /**
-     * Tra cứu instance của PRODUCT-SERVICE thông qua DiscoveryClient từ Eureka Server.
-     * Nếu không tìm thấy, trả về lỗi 503 Service Unavailable (ApiResponseError).
-     */
     @GetMapping("/discovery/product-service")
     public ResponseEntity<Map<String, Object>> discoverProductService() {
         List<ServiceInstance> instances = discoveryClient.getInstances("PRODUCT-SERVICE");
@@ -82,28 +78,21 @@ public class OrderController {
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * Tạo đơn hàng với việc tra cứu động vị trí PRODUCT-SERVICE qua DiscoveryClient.
-     * Bất kể Product Service chạy ở port 8082 hay 9090, Eureka đều trả về đúng địa chỉ.
-     */
     @PostMapping("/create-with-discovery")
     public ResponseEntity<Order> createOrderWithDiscovery(@RequestBody OrderRequestDTO request) {
         log.info("Bắt đầu quy trình tạo đơn hàng cho Customer ID: {}, Product ID: {}", request.getCustomerId(), request.getProductId());
 
-        // 1. Dùng DiscoveryClient hỏi Eureka xem PRODUCT-SERVICE đang ở đâu
         List<ServiceInstance> instances = discoveryClient.getInstances("PRODUCT-SERVICE");
         if (instances == null || instances.isEmpty()) {
             log.error("Không tìm thấy instance nào của PRODUCT-SERVICE trên Eureka Server!");
             throw new ServiceUnavailableException("503 Service Unavailable: Không tìm thấy instance nào của PRODUCT-SERVICE trên Eureka Server");
         }
 
-        // 2. Lấy instance đầu tiên từ danh sách
         ServiceInstance productInstance = instances.get(0);
         String baseUrl = productInstance.getUri().toString();
         String productUrl = baseUrl + "/api/v1/products/" + request.getProductId();
         log.info("Tìm thấy PRODUCT-SERVICE tại URL: {}. Tiến hành gọi lấy thông tin sản phẩm...", productUrl);
 
-        // 3. Gọi HTTP sang PRODUCT-SERVICE để lấy chi tiết sản phẩm
         ProductResponseDTO product;
         try {
             product = restTemplate.getForObject(productUrl, ProductResponseDTO.class);
@@ -116,7 +105,6 @@ public class OrderController {
             throw new ServiceUnavailableException("503 Service Unavailable: Không thể lấy thông tin sản phẩm từ PRODUCT-SERVICE");
         }
 
-        // 4. Tính toán tổng tiền và tạo đơn hàng
         BigDecimal totalPrice = product.getPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
         Long newId = idCounter.getAndIncrement();
         Order order = Order.builder()
